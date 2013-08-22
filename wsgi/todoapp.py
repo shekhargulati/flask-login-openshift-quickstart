@@ -1,6 +1,5 @@
 from datetime import datetime
-from flask import Flask, request, flash, url_for, redirect, \
-     render_template, abort
+from flask import Flask, request, flash, url_for, redirect, render_template, abort ,g
 from flask.ext.sqlalchemy import SQLAlchemy
 from flask.ext.login import LoginManager
 from flask.ext.login import login_user , logout_user , current_user , login_required
@@ -58,7 +57,12 @@ class Todo(db.Model):
         self.pub_date = datetime.utcnow()
 
 
+@app.before_request
+def before_request():
+    g.user = current_user
+
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html',
         todos=Todo.query.order_by(Todo.pub_date.desc()).all()
@@ -66,6 +70,7 @@ def index():
 
 
 @app.route('/new', methods=['GET', 'POST'])
+@login_required
 def new():
     if request.method == 'POST':
         if not request.form['title']:
@@ -81,6 +86,7 @@ def new():
     return render_template('new.html')
 
 @app.route('/todos/<int:todo_id>', methods = ['GET' , 'POST'])
+@login_required
 def show_or_update(todo_id):
     todo_item = Todo.query.get(todo_id)
     if request.method == 'GET':
@@ -118,6 +124,11 @@ def login():
 @login_manager.user_loader
 def load_user(id):
     return User.query.get(int(id))
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('index')) 
 
 if __name__ == '__main__':
     app.run()
