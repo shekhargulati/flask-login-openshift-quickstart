@@ -97,13 +97,26 @@ def register():
     user = User(request.form['username'] , request.form['password'],request.form['email'])
     db.session.add(user)
     db.session.commit()
-    flash(u'User successfully registered')
+    flash('User successfully registered')
     return redirect(url_for('login'))
 
 @app.route('/login',methods=['GET','POST'])
 def login():
     if request.method == 'GET':
         return render_template('login.html')
-    return redirect(url_for('index'))
+    username = request.form['username']
+    password = request.form['password']
+    registered_user = User.query.filter_by(username=username,password=password).first()
+    if registered_user is None:
+        flash('Username or Password is invalid' , 'error')
+        return redirect(url_for('login'))
+    login_user(user)
+    flash('Logged in successfully')
+    return redirect(request.args.get('next') or url_for('index'))
+
+@login_manager.user_loader
+def load_user(id):
+    return User.query.get(int(id))
+
 if __name__ == '__main__':
     app.run()
