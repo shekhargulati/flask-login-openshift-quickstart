@@ -3,6 +3,7 @@ from flask import Flask, request, flash, url_for, redirect, \
      render_template, abort
 from flask.ext.sqlalchemy import SQLAlchemy
 from flask.ext.login import LoginManager
+from flask.ext.login import login_user , logout_user , current_user , login_required
 
 app = Flask(__name__)
 app.config.from_pyfile('todoapp.cfg')
