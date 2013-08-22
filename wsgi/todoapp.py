@@ -113,11 +113,13 @@ def login():
         return render_template('login.html')
     username = request.form['username']
     password = request.form['password']
+    remember_me = request.form['remember_me']
+    session['remember_me'] = remember_me
     registered_user = User.query.filter_by(username=username,password=password).first()
     if registered_user is None:
         flash('Username or Password is invalid' , 'error')
         return redirect(url_for('login'))
-    login_user(registered_user)
+    login_user(registered_user , remember=remember_me)
     flash('Logged in successfully')
     return redirect(request.args.get('next') or url_for('index'))
 
