@@ -3,6 +3,7 @@ from flask import Flask,session, request, flash, url_for, redirect, render_templ
 from flask.ext.sqlalchemy import SQLAlchemy
 from flask.ext.login import LoginManager
 from flask.ext.login import login_user , logout_user , current_user , login_required
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.config.from_pyfile('todoapp.cfg')
@@ -17,16 +18,22 @@ class User(db.Model):
     __tablename__ = "users"
     id = db.Column('user_id',db.Integer , primary_key=True)
     username = db.Column('username', db.String(20), unique=True , index=True)
-    password = db.Column('password' , db.String(10))
+    password = db.Column('password' , db.String(250))
     email = db.Column('email',db.String(50),unique=True , index=True)
     registered_on = db.Column('registered_on' , db.DateTime)
     todos = db.relationship('Todo' , backref='user',lazy='dynamic')
 
     def __init__(self , username ,password , email):
         self.username = username
-        self.password = password
+        self.set_password(password)
         self.email = email
         self.registered_on = datetime.utcnow()
+
+    def set_password(self , password):
+        self.password = generate_password_hash(password)
+
+    def check_password(self , password):
+        return check_password_hash(self.password , password)
 
     def is_authenticated(self):
         return True
@@ -120,9 +127,12 @@ def login():
     remember_me = False
     if 'remember_me' in request.form:
         remember_me = True
-    registered_user = User.query.filter_by(username=username,password=password).first()
+    registered_user = User.query.filter_by(username=username).first()
     if registered_user is None:
-        flash('Username or Password is invalid' , 'error')
+        flash('Username is invalid' , 'error')
+        return redirect(url_for('login'))
+    if not registered_user.check_password(password):
+        flash('Password is invalid','error')
         return redirect(url_for('login'))
     login_user(registered_user, remember = remember_me)
     flash('Logged in successfully')
