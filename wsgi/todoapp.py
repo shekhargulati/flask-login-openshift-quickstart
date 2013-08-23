@@ -10,6 +10,7 @@ db = SQLAlchemy(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
+
 login_manager.login_view = 'login'
 
 class User(db.Model):
@@ -19,6 +20,7 @@ class User(db.Model):
     password = db.Column('password' , db.String(10))
     email = db.Column('email',db.String(50),unique=True , index=True)
     registered_on = db.Column('registered_on' , db.DateTime)
+    todos = db.relationship('Todo' , backref='user',lazy='dynamic')
 
     def __init__(self , username ,password , email):
         self.username = username
@@ -41,7 +43,6 @@ class User(db.Model):
     def __repr__(self):
         return '<User %r>' % (self.username)
 
-
 class Todo(db.Model):
     __tablename__ = 'todos'
     id = db.Column('todo_id', db.Integer, primary_key=True)
@@ -49,6 +50,7 @@ class Todo(db.Model):
     text = db.Column(db.String)
     done = db.Column(db.Boolean)
     pub_date = db.Column(db.DateTime)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'))
 
     def __init__(self, title, text):
         self.title = title
@@ -57,15 +59,11 @@ class Todo(db.Model):
         self.pub_date = datetime.utcnow()
 
 
-@app.before_request
-def before_request():
-    g.user = current_user
-
 @app.route('/')
 @login_required
 def index():
     return render_template('index.html',
-        todos=Todo.query.order_by(Todo.pub_date.desc()).all()
+        todos=Todo.query.filter_by(user_id = g.user.id).order_by(Todo.pub_date.desc()).all()
     )
 
 
@@ -79,9 +77,10 @@ def new():
             flash('Text is required', 'error')
         else:
             todo = Todo(request.form['title'], request.form['text'])
+            todo.user = g.user
             db.session.add(todo)
             db.session.commit()
-            flash(u'Todo item was successfully created')
+            flash('Todo item was successfully created')
             return redirect(url_for('index'))
     return render_template('new.html')
 
@@ -91,11 +90,15 @@ def show_or_update(todo_id):
     todo_item = Todo.query.get(todo_id)
     if request.method == 'GET':
         return render_template('view.html',todo=todo_item)
-    todo_item.title = request.form['title']
-    todo_item.text  = request.form['text']
-    todo_item.done  = ('done.%d' % todo_id) in request.form
-    db.session.commit()
-    return redirect(url_for('index'))
+    if todo_item.user.id == g.user.id:
+        todo_item.title = request.form['title']
+        todo_item.text  = request.form['text']
+        todo_item.done  = ('done.%d' % todo_id) in request.form
+        db.session.commit()
+        return redirect(url_for('index'))
+    flash('You are not authorized to edit this todo item','error')
+    return redirect(url_for('show_or_update',todo_id=todo_id))
+
 
 @app.route('/register' , methods=['GET','POST'])
 def register():
@@ -111,26 +114,32 @@ def register():
 def login():
     if request.method == 'GET':
         return render_template('login.html')
+    
     username = request.form['username']
     password = request.form['password']
-    remember_me = request.form['remember_me']
-    session['remember_me'] = remember_me
+    remember_me = False
+    if 'remember_me' in request.form:
+        remember_me = True
     registered_user = User.query.filter_by(username=username,password=password).first()
     if registered_user is None:
         flash('Username or Password is invalid' , 'error')
         return redirect(url_for('login'))
-    login_user(registered_user , remember=remember_me)
+    login_user(registered_user, remember = remember_me)
     flash('Logged in successfully')
     return redirect(request.args.get('next') or url_for('index'))
-
-@login_manager.user_loader
-def load_user(id):
-    return User.query.get(int(id))
 
 @app.route('/logout')
 def logout():
     logout_user()
     return redirect(url_for('index')) 
+
+@login_manager.user_loader
+def load_user(id):
+    return User.query.get(int(id))
+
+@app.before_request
+def before_request():
+    g.user = current_user
 
 if __name__ == '__main__':
     app.run()
